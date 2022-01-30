@@ -53,8 +53,19 @@ server.post("/participants", async (req, res) => {
     }
 })
 
-server.get("/participants", (req, res) => {
-    res.send("get participants OK")
+server.get("/participants", async (req, res) => {
+    try {
+        await mongoClient.connect()
+        const participants = mongoClient.db("chat_UOL").collection("participants");
+        const listParticipants = await participants.find({}).toArray();
+        console.log(listParticipants)
+        res.status(200).send(listParticipants)
+        mongoClient.close();
+    } catch (error) {
+        console.error(error);
+        res.sendStatus(500)
+        mongoClient.close();
+    }
 })
 
 server.post("/messages", (req, res) => {

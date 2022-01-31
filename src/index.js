@@ -25,8 +25,6 @@ function message(from, {to, text, type}){
     }
 }
 
-let user;
-
 dotenv.config();
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
@@ -63,9 +61,6 @@ server.post("/participants", async (req, res) => {
             await participants.insertOne({...username, lastStatus: Date.now()})
             await messages.insertOne(statusMessage(username.name, "entra"))
         }
-
-        user = req.body.name;
-        console.log(user);
 
         res.sendStatus(201)
         mongoClient.close()
@@ -164,6 +159,36 @@ server.post("/status", async (req, res) => {
         mongoClient.close(); 
     }
 })
+
+setInterval(async () => {
+    const limit = Date.now() - 10000;
+    try {
+        await mongoClient.connect()
+
+        const participants = mongoClient.db("chat_UOL").collection("participants");
+        const messages = mongoClient.db("chat_UOL").collection("messages");
+        let listParticipants = await participants.find({}).toArray()
+
+        listParticipants = listParticipants.filter(participant => participant.lastStatus < limit)
+
+        for(let i = 0; i < listParticipants.length; i++){
+            await messages.insertOne(statusMessage(listParticipants[i].name, "sai"))
+            await participants.deleteOne({ _id: listParticipants[i]._id })
+        }
+
+        /*const queroVer = listParticipants.map(async (participant) =>{
+            await participants.deleteOne({ _id: participant._id })
+            //await messages.insertOne(statusMessage(participant.name, "sai"))
+            return statusMessage(participant.name, "sai")
+        } )*/
+        mongoClient.close();
+    } catch (error) {
+        mongoClient.close();
+    }
+}, 5000);
+
+
+
 
 server.listen(5000, () => {
     console.log("Running on http://localhost:5000")

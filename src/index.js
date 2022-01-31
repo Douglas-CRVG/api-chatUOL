@@ -175,12 +175,6 @@ setInterval(async () => {
             await messages.insertOne(statusMessage(listParticipants[i].name, "sai"))
             await participants.deleteOne({ _id: listParticipants[i]._id })
         }
-
-        /*const queroVer = listParticipants.map(async (participant) =>{
-            await participants.deleteOne({ _id: participant._id })
-            //await messages.insertOne(statusMessage(participant.name, "sai"))
-            return statusMessage(participant.name, "sai")
-        } )*/
         mongoClient.close();
     } catch (error) {
         mongoClient.close();

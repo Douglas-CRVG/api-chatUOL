@@ -25,6 +25,8 @@ function message(from, {to, text, type}){
     }
 }
 
+let user;
+
 dotenv.config();
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
@@ -61,6 +63,9 @@ server.post("/participants", async (req, res) => {
             await participants.insertOne({...username, lastStatus: Date.now()})
             await messages.insertOne(statusMessage(username.name, "entra"))
         }
+
+        user = req.body.name;
+        console.log(user);
 
         res.sendStatus(201)
         mongoClient.close()
@@ -115,8 +120,26 @@ server.post("/messages", async (req, res) => {
     }
 })
 
-server.get("/messages", (req, res) => {
-    res.send("get messages OK")
+server.get("/messages", async (req, res) => {
+    const username = req.headers.user
+    const limit = parseInt(req.query.limit)
+    try {
+        await mongoClient.connect()
+
+        const messages = mongoClient.db("chat_UOL").collection("messages");
+        let listMessages = await messages.find({}).toArray();
+        listMessages = listMessages.filter(message => (message.from === username) || (message.type === "message") || (message.to === username));
+
+        if (limit && limit > 0){
+            listMessages = listMessages.slice(-1*limit)
+        }
+
+        res.status(200).send(listMessages)
+        mongoClient.close();
+    } catch (error) {
+        res.sendStatus(500)
+        mongoClient.close();
+    }
 })
 
 server.post("/status", (req, res) => {

@@ -142,8 +142,27 @@ server.get("/messages", async (req, res) => {
     }
 })
 
-server.post("/status", (req, res) => {
-    res.send("post status OK")
+server.post("/status", async (req, res) => {
+    let username = req.headers.user;
+    try {
+        await mongoClient.connect();
+
+        const participants = mongoClient.db("chat_UOL").collection("participants");
+        const listParticipants = await participants.find({name: username}).toArray();
+
+        if(listParticipants.length > 0) {
+            username = listParticipants[0]
+            await participants.updateOne({ _id: username._id }, {$set: {lastStatus: Date.now()}})
+        } else {
+            return res.sendStatus(404)
+        }
+
+        res.sendStatus(200);
+        mongoClient.close();
+    } catch (error) {
+        res.sendStatus(500);
+        mongoClient.close(); 
+    }
 })
 
 server.listen(5000, () => {

@@ -5,9 +5,9 @@ import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 import dayjs from "dayjs";
 
-function statusMessage(name, status){
+function statusMessage(from, status){
     return {
-        from: name,
+        from,
         to: 'Todos',
         text: `${status} na sala...`,
         type: 'status',
@@ -15,9 +15,20 @@ function statusMessage(name, status){
     }
 }
 
+function message(from, {to, text, type}){
+    return {
+        from,
+        to,
+        text,
+        type,
+        time: dayjs().locale('pt-br').format('HH:mm:ss')
+    }
+}
+
 dotenv.config();
 
 const mongoClient = new MongoClient(process.env.MONGO_URI);
+let listParticipantsOn = [];
 
 const server = express();
 server.use(cors())
@@ -27,10 +38,17 @@ const usernameSchema = joi.object({
     name: joi.string().min(1).required()
 });
 
+const messageSchema = joi.object({
+    to: joi.string().min(1).required(),
+    text: joi.string().invalid("").required(),
+    type: joi.string().valid('message', 'private_message').required()
+});
+
 server.post("/participants", async (req, res) => {
     const username = req.body;
     try {
         await mongoClient.connect()
+
         const participants = mongoClient.db("chat_UOL").collection("participants");
         const messages = mongoClient.db("chat_UOL").collection("messages");
         
@@ -47,7 +65,6 @@ server.post("/participants", async (req, res) => {
         res.sendStatus(201)
         mongoClient.close()
     } catch (error) {
-        console.error(error);
         res.sendStatus(500)
         mongoClient.close();
     }
@@ -56,20 +73,46 @@ server.post("/participants", async (req, res) => {
 server.get("/participants", async (req, res) => {
     try {
         await mongoClient.connect()
+
         const participants = mongoClient.db("chat_UOL").collection("participants");
         const listParticipants = await participants.find({}).toArray();
-        console.log(listParticipants)
+        listParticipantsOn = listParticipants.map(iten => iten.name)
+
         res.status(200).send(listParticipants)
         mongoClient.close();
     } catch (error) {
-        console.error(error);
         res.sendStatus(500)
         mongoClient.close();
     }
 })
 
-server.post("/messages", (req, res) => {
-    res.send("post messages OK")
+server.post("/messages", async (req, res) => {
+    try {
+        await mongoClient.connect()
+
+        const participants = mongoClient.db("chat_UOL").collection("participants");
+        const messages = mongoClient.db("chat_UOL").collection("messages");
+        const listParticipants = await participants.find({}).toArray();
+        listParticipantsOn = listParticipants.map(participant => participant.name);
+
+        if(!listParticipantsOn.includes(req.headers.user)){
+            return res.status(422).send("Usuário não encontrado")
+        }
+
+        const validateMessage = messageSchema.validate(req.body, { abortEarly: false });
+
+        if(validateMessage.error){
+            return res.status(422).send(validateMessage.error.details);
+        }
+
+        await messages.insertOne(message(req.headers.user, req.body))
+
+        res.sendStatus(201)
+        mongoClient.close();
+    } catch (error) {
+        res.sendStatus(500)
+        mongoClient.close();
+    }
 })
 
 server.get("/messages", (req, res) => {
